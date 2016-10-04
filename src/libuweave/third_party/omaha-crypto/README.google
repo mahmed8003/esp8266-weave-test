@@ -1,0 +1,11 @@
+URL: https://github.com/google/omaha/tree/0b22a631493be08e86f4991de12d6e0ebb5d5a7d/omaha/base/security
+Version: 2015/12/03
+License: Apache 2.0
+License File: LICENSE
+
+Description:
+Several lightweight implementations of cryptographic algorithms.
+
+Local Modifications:
+LICENSE file has been created for compliance purposes. Not included in original
+distribution.

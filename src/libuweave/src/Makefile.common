@@ -1,0 +1,75 @@
+# Copyright 2015 The Weave Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+#
+# Makefile for making the main uWeave library
+#
+
+# Source files can be excluded from the build using the environment
+#     C_SOURCE_EXCLUDES variable, for example:
+# C_SOURCE_EXCLUDES="skipped_source.c development_file.c"
+#
+# The variable must be defined on the make command-line or exported to take
+# effect.
+
+DEPTH ?= ..
+
+.SUFFIXES:
+.SUFFIXES: .c .o
+
+include $(DEPTH)/build/Makefile.utilities
+
+$(call check_defined ARCH_OUT_DIR)
+
+ifndef $(TOOLCHAIN)
+  # Not included in the standard set of Makefile tool exports.
+  SIZE=size
+endif
+
+include $(DEPTH)/third_party/Makefile.common
+
+# Automatically generated header
+AUTO_HEADER_DIR := $(BASE_OUT_DIR)/include/uweave-generated
+
+$(AUTO_HEADER_DIR):
+	@mkdir -p $@
+
+BUILD_VERSION_HEADER := $(AUTO_HEADER_DIR)/build_version.h
+
+# Set the version as unix timestamp/head short-revision(/parent short-rev?)(/M?)
+# Where the /parent is present if the current revision is unsubmitted.
+# Where /M is present if there are local modifications.
+UW_BUILD_VERSION := $(shell \
+   (git log -1 --format='%at/%h'; \
+    git log -1 | grep -q 'Reviewed-on:' || git log -2 --format='%h' | tail -n 1 ; \
+    git diff-index --quiet HEAD || echo 'M';) | paste -d/ -s -)
+OLD_UW_BUILD_VERSION := $(shell cat $(BUILD_VERSION_HEADER) | cut -d\" -f 2)
+
+ifneq ($(UW_BUILD_VERSION), $(OLD_UW_BUILD_VERSION))
+$(BUILD_VERSION_HEADER): $(AUTO_HEADER_DIR)
+	printf '#define UW_BUILD_VERSION "%s"\n' "$(UW_BUILD_VERSION)" > $(BUILD_VERSION_HEADER)
+.PHONY: $(BUILD_VERSION_HEADER)
+endif
+
+# The output directory
+LIBUWEAVE_OUT_DIR := $(ARCH_OUT_DIR)/libuweave
+LIBUWEAVE_SRC_DIR := src
+
+LIBUWEAVE_C_SOURCE_FILES := $(filter-out $(C_SOURCE_EXCLUDES),$(wildcard $(DEPTH)/$(LIBUWEAVE_SRC_DIR)/*.c))
+LIBUWEAVE_OBJECTS := $(addprefix $(LIBUWEAVE_OUT_DIR)/,$(notdir $(LIBUWEAVE_C_SOURCE_FILES:.c=.o)))
+
+UWEAVE_STATIC_LIB = $(LIBUWEAVE_OUT_DIR)/libuweave.a
+
+# Main target is the uWeave library
+$(UWEAVE_STATIC_LIB): $(LIBUWEAVE_OBJECTS) \
+  $(TINYCBOR_OBJECTS) \
+  | $(LIBUWEAVE_OUT_DIR) $(BUILD_VERSION_HEADER)
+	$(AR) rcs $@ $^
+$(LIBUWEAVE_OUT_DIR):
+	@mkdir -p $@
+
+$(LIBUWEAVE_OUT_DIR)/%.o: $(LIBUWEAVE_SRC_DIR)/%.c | $(LIBUWEAVE_OUT_DIR) $(BUILD_VERSION_HEADER)
+	$(CC) $(CFLAGS) $(INCLUDE_PATHS) -c -o $@ $<
+
+-include $(LIBUWEAVE_OBJECTS:.o=.d)
